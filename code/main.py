@@ -6,9 +6,8 @@ from detector import JutsuDetector
 
 WINDOW_WIDTH = 900
 WINDOW_HEIGHT = 600
-VIDEO_WIDTH = 900
-VIDEO_HEIGHT = 450
-
+VIDEO_WIDTH = 1280
+VIDEO_HEIGHT = 720
 class NarutoApp:
     def __init__(self, root):
         self.root = root
@@ -18,6 +17,8 @@ class NarutoApp:
 
         # LOGIC INITIALIZATION
         self.detector = JutsuDetector(model_path="../model/best.pt")
+        self.current_win_w = 900
+        self.current_win_h = 600
 
         self.setup_ui()
 
@@ -27,7 +28,8 @@ class NarutoApp:
         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, VIDEO_HEIGHT)
 
         # STATE
-        self.running = True
+        #self.running = True
+        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
 
         # LOOP
         self.update_loop()
@@ -35,59 +37,77 @@ class NarutoApp:
     def setup_ui(self):
         self.video_canvas = tk.Canvas(
             self.root,
-            width=VIDEO_WIDTH,
-            height=VIDEO_HEIGHT,
+            #width=VIDEO_WIDTH,
+            #height=VIDEO_HEIGHT,
             bg="black",
             highlightthickness=0
         )
         self.video_canvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
         
+        # IMPORTANT: This line connects the window resizing to the app
+        self.root.bind("<Configure>", self.on_resize)
+        
+    def on_resize(self, event):
+        # This updates whenever the window is resized
+        # Use event.width and event.height to get new dimensions
+        self.current_win_w = event.width
+        self.current_win_h = event.height
+        
     def update_loop(self):
         ret, frame = self.cap.read()
         if ret:
             frame = cv2.flip(frame, 1) # mirroring our camera
-            raw_h, raw_w = frame.shape[:2]
-
-            # We're going to do some basic math to match our WINDOW_WIDTH
-            # And then we'll match the height based on the aspect ratio (scale_factor)
-            scale_factor = VIDEO_WIDTH / raw_w
-            new_h = int(raw_h * scale_factor)
-            frame = cv2.resize(frame, (VIDEO_WIDTH, new_h))
-            frame = frame[0:VIDEO_HEIGHT, 0:VIDEO_WIDTH]
+            #raw_h, raw_w = frame.shape[:2]
             
+            # 1. AI DETECTION
+            # Detect jutsus BEFORE resize so the AI sees the original quality
             detections = self.detector.detect(frame)
 
-            # Drawing the bounding boxes
+            # 2. Drawing the bounding boxes
             for label, conf, (x1, y1, x2, y2) in detections:
-                color = (0, 255, 0) #Green in BGR
+                color = (0, 255, 0)
                 cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
-                text = f"{label}: {conf:.2f}"
-                (w, h), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)
-                cv2.rectangle(frame, (x1, y1 - 25), (x1 + w, y1), color, -1)
-                cv2.putText(frame, text, (x1, y1 - 5),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+                cv2.putText(frame, f"{label} {conf:.2f}", (x1, y1 - 10),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
-            # Tkinter and PIL follow "RGB" colour order
-            # Whereas the OpenCV library follows "BGR" colour order
-            # So we need to convert it to RGB
-            img_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            pil_img = Image.fromarray(img_rgb)
-            tk_img = ImageTk.PhotoImage(image=pil_img)
+            # 3. SCALING THE FRAME TO FIT (MIN) / FILL (MAX)
+            raw_h, raw_w = frame.shape[:2]
+            # Calculate scale based on the variables updated by on_resize
+            scale = max(self.current_win_w / raw_w, self.current_win_h / raw_h)
+            
+            if scale > 0:
+                new_w, new_h = int(raw_w * scale), int(raw_h * scale)
+                # cv2.INTER_AREA >> best for shrinking
+                # cv2.INTER_CUBIC >> best for enlarging
+                frame = cv2.resize(frame, (new_w, new_h), interpolation=cv2.INTER_CUBIC)
 
-            # First frame: We create the image on the canvas
-            # Every frame after that: We're just updating it constantly
-            if not hasattr(self, 'video_image_id'):
-                self.video_image_id = self.video_canvas.create_image(
-                    0, 0, image = tk_img, anchor = tk.NW
-                )
-            else:
-                self.video_canvas.itemconfig(self.video_image_id, image = tk_img)
+                # 4. DISPLAY
+                # Convert from Tkinter
+                img_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                pil_img = Image.fromarray(img_rgb)
+                tk_img = ImageTk.PhotoImage(image=pil_img)
 
-            # We need to keep a reference of the image otherwise Python will just garbage-collect the image
-            self.video_canvas.image = tk_img
+                # 5. RENDER TO CANVAS
+                if not hasattr(self, 'video_image_id'):
+                    self.video_image_id = self.video_canvas.create_image(
+                        self.current_win_w // 2, self.current_win_h // 2, 
+                        image=tk_img, anchor=tk.CENTER
+                    )
+                else:
+                    self.video_canvas.itemconfig(self.video_image_id, image=tk_img)
+                    self.video_canvas.coords(self.video_image_id, 
+                                           self.current_win_w // 2, 
+                                           self.current_win_h // 2)
 
-        # We're calling this function to update the frame every 30ms
+                self.video_canvas.image = tk_img
+
+        # 6. REPEAT EVERY 30ms
         self.root.after(30, self.update_loop)
+
+    # Clean up resources to prevent memory leaks or camera lock-up
+    def on_closing(self):
+        self.cap.release()
+        self.root.destroy()
 
 if __name__ == "__main__":
     root = tk.Tk()
