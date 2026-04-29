@@ -54,6 +54,18 @@ class NarutoApp:
             new_h = int(raw_h * scale_factor)
             frame = cv2.resize(frame, (VIDEO_WIDTH, new_h))
             frame = frame[0:VIDEO_HEIGHT, 0:VIDEO_WIDTH]
+            
+            detections = self.detector.detect(frame)
+
+            # Drawing the bounding boxes
+            for label, conf, (x1, y1, x2, y2) in detections:
+                color = (0, 255, 0) #Green in BGR
+                cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+                text = f"{label}: {conf:.2f}"
+                (w, h), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)
+                cv2.rectangle(frame, (x1, y1 - 25), (x1 + w, y1), color, -1)
+                cv2.putText(frame, text, (x1, y1 - 5),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
 
             # Tkinter and PIL follow "RGB" colour order
             # Whereas the OpenCV library follows "BGR" colour order
