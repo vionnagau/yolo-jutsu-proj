@@ -127,9 +127,13 @@ def _apply_alpha_overlay(bg, fg, x, y, size=None, sw=900, sh=450, is_full=False)
         fg_part = fg[fg_y1:fg_y1 + (y2_c - y1_c), fg_x1:fg_x1 + (x2_c - x1_c)]
         roi = bg[y1_c:y2_c, x1_c:x2_c]
 
-        # Vectorized Alpha Blending
-        alpha = fg_part[:, :, 3:4] / 255.0  # Expand dims for broadcasting
-        roi[:] = (alpha * fg_part[:, :, :3] + (1 - alpha) * roi).astype(np.uint8)
+        # Vectorized Alpha Blending - Ensure explicit broadcasting
+        alpha = fg_part[:, :, 3:4] / 255.0 
+        fg_rgb = fg_part[:, :, :3]
+        
+        # This formula blends the foreground with the background ROI
+        res = (alpha * fg_rgb + (1 - alpha) * roi).astype(np.uint8)
+        bg[y1_c:y2_c, x1_c:x2_c] = res # Force the result back into the original image
             
         return bg
     
