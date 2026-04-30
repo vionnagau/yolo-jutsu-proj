@@ -3,6 +3,7 @@ import tkinter as tk
 from PIL import Image, ImageTk, ImageFilter, ImageEnhance
 
 from detector import JutsuDetector
+from game_state import JutsuGame
 
 WINDOW_WIDTH = 900
 WINDOW_HEIGHT = 600
@@ -17,6 +18,8 @@ class NarutoApp:
 
         # LOGIC INITIALIZATION
         self.detector = JutsuDetector(model_path="../model/best.pt")
+        self.game = JutsuGame()
+        
         self.current_win_w = 900
         self.current_win_h = 600
 
@@ -62,6 +65,18 @@ class NarutoApp:
             # 1. AI DETECTION
             # Detect jutsus BEFORE resize so the AI sees the original quality
             detections = self.detector.detect(frame)
+            
+            # This strips hyphens & spaces that might cause label mismatches
+            detected_labels = [d[0].replace("-", "").strip() for d in detections]
+            self.game.update(detected_labels)
+
+            # Drawing the target jutsu name on the video frame
+            status = self.game.get_status()
+            cv2.putText(frame, "CURRENT TARGET:", (VIDEO_WIDTH - 500, 50),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (200, 200, 200), 2)
+            cv2.putText(frame, status['target'].upper(), (VIDEO_WIDTH - 500, 90),
+                        cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 0), 3)
+
 
             # 2. Drawing the bounding boxes
             for label, conf, (x1, y1, x2, y2) in detections:
