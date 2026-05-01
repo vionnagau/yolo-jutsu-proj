@@ -16,6 +16,9 @@ WINDOW_WIDTH = 900
 WINDOW_HEIGHT = 600
 VIDEO_WIDTH = 1280
 VIDEO_HEIGHT = 720
+SIGN_IMG_SIZE = 64
+ASSETS_DIR = os.path.join(os.path.dirname(__file__), '..', 'assets')
+
 class NarutoApp:
     def __init__(self, root):
         self.root = root
@@ -110,6 +113,7 @@ class NarutoApp:
             bg="black", highlightthickness=0
         )
         self.video_canvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+        self.video_canvas.bind("<Configure>", self.on_resize)
 
         # 3. SETTINGS BUTTON
         self.settings_btn = tk.Button(
@@ -128,85 +132,63 @@ class NarutoApp:
      
     # start of the function that updates the hand sign strip at the bottom of the screen   
     def refresh_strip(self):
-        
-        #FIX: remove canvas and button initialization from this function
-        #this function now ONLY handle the refreshing of hand-sign icons
-        
-        # clear out any existing hand sign pictures first
-        for w in self.sign_widgets:
-            w["main_frame"].destroy() 
+        # 1. Clear existing icons from the UI frame and reset state containers
+        for widget in self.strip_frame.winfo_children():
+            widget.destroy()
+
         self.sign_widgets = []
-        
-        # get the new jutsu sequence (ex:'Dog', 'Bird', 'Monkey')
+        self.sign_images.clear()
+
         status = self.game.get_status()
-        sequence = status["sequence"]
-        SIGN_IMG_SIZE = 55
-        
+        sequence = status.get("sequence", [])
+        current_idx = status.get("current_index", 0)
+
         for i, sign_name in enumerate(sequence):
-            
-            # ERROR FIX: Ensure frames are child of self.strip_frame
-            # create a small container for each hand sign
             main_frame = tk.Frame(self.strip_frame, bg="#1a1a1a", padx=5)
             main_frame.pack(side=tk.LEFT)
 
-            border_frame = tk.Frame(main_frame, bg="#333", padx=2, pady=2)
+            border_frame = tk.Frame(main_frame, bg="#1a1a1a", highlightthickness=2, highlightbackground="#1a1a1a")
             border_frame.pack()
-            
-            # Load and cache image
-            img_path = f"assets/signs/{sign_name}.png"
-            try:
-                pil_img = Image.open(img_path).resize((SIGN_IMG_SIZE, SIGN_IMG_SIZE))
-                tk_img = ImageTk.PhotoImage(pil_img)
-                self.sign_images[f"{sign_name}_{i}"] = tk_img 
-            except Exception as e:
-                print(f"Error loading {img_path}: {e}")
-                tk_img = None
 
-            lbl_img = tk.Label(border_frame, image=tk_img, bg="black")
+            img_frame = tk.Frame(border_frame, bg="#1a1a1a")
+            img_frame.pack(padx=2, pady=2)
+
+            img_filename = f"{sign_name.lower()}.png"
+            img_path = os.path.join(ASSETS_DIR, img_filename)
+
+            try:
+                pil_img = Image.open(img_path).convert("RGBA").resize((SIGN_IMG_SIZE, SIGN_IMG_SIZE), Image.LANCZOS)
+            except Exception as e:
+                print(f"UI Error: Could not load asset {img_path}: {e}")
+                pil_img = Image.new("RGBA", (SIGN_IMG_SIZE, SIGN_IMG_SIZE), (40, 40, 40, 255))
+
+            tk_img_normal = ImageTk.PhotoImage(pil_img)
+            tk_img_dimmed = ImageTk.PhotoImage(ImageEnhance.Brightness(pil_img).enhance(0.45))
+
+            normal_key = f"{sign_name}_{i}_normal"
+            dimmed_key = f"{sign_name}_{i}_dimmed"
+            self.sign_images[normal_key] = tk_img_normal
+            self.sign_images[dimmed_key] = tk_img_dimmed
+
+            lbl_img = tk.Label(img_frame, image=tk_img_normal, bg="#1a1a1a")
+            lbl_img.image = tk_img_normal
             lbl_img.pack()
 
-            lbl_text = tk.Label(main_frame, text=sign_name.upper(), 
-                               fg="#888", bg="#1a1a1a", font=("Arial", 7, "bold"))
+            lbl_text = tk.Label(img_frame, text=sign_name, fg="white", bg="#1a1a1a", font=("Arial", 8))
             lbl_text.pack()
-            
-            # keep track of everything so can change the colors later
+
+            if i == current_idx:
+                border_frame.config(highlightbackground="yellow", highlightthickness=2)
+            else:
+                border_frame.config(highlightthickness=2)
+
             self.sign_widgets.append({
-                "main_frame": main_frame,
-                "border_frame": border_frame,
-                "lbl_img": lbl_img, 
+                "lbl_img": lbl_img,
                 "lbl_text": lbl_text,
-                "name": sign_name, 
-                "id": i
+                "border_frame": border_frame,
+                "name": sign_name,
+                "index": i
             })
-            
-        # this will update the text labels (ex: CHIDORI, etc)
-        self.update_dashboard()
-        
-        # end of the function that updates the hand sign strip at the bottom of the screen
-        
-        # WARNING
-        # video_canvas and settings_btn MUST be moved to setup_ui() 
-        # so they are not destroyed/recreated every time the jutsu changes
-        
-        # # camera feed canvas
-        # self.video_canvas = tk.Canvas(
-        #     self.root,
-        #     width=VIDEO_WIDTH, height=VIDEO_HEIGHT,
-        #     bg="black", highlightthickness=0
-        # )
-        # self.video_canvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-        
-        # # floating button to change jutsus
-        # self.settings_btn = tk.Button(
-        #     self.root,
-        #     text="NEXT JUTSU >>",
-        #     font=("Arial", 12, "bold"),
-        #     bg="#444", fg="white",
-        #     activebackground="#666", activeforeground="white",
-        #     bd=0, padx=15, pady=8,
-        #     command=self.cycle_jutsu
-        # )
-        # self.settings_btn.place(x=WINDOW_WIDTH - 200, y=20)
         
     def on_resize(self, event):
         # This updates whenever the window is resized
@@ -215,29 +197,45 @@ class NarutoApp:
         self.current_win_h = event.height
         
     def update_loop(self):
+        # 1. Capture and Pre-process
         ret, frame = self.cap.read()
         if not ret:
             self.root.after(30, self.update_loop)
             return
 
-        frame = cv2.flip(frame, 1) # Mirroring
-        status = self.game.get_status()
+        frame = cv2.flip(frame, 1) # Mirroring for user experience
+        
+        # ERROR FIX: Pull the dictionary from your game_state.py
+        status = self.game.get_status() 
         detections = []
         target_x, target_y = None, None
 
         # --- LOGIC PHASE ---
         if not status["is_complete"]:
-            # Active Detection Mode
+            # Active Detection: Looking for hand signs
             detections = self.detector.detect(frame)
-            detected_labels = [d[0].replace("-", "").strip() for d in detections]
+            
+            # ERROR FIX: Normalize labels to lowercase to match assets (e.g., bird.png)
+            detected_labels = [d[0].lower().strip() for d in detections]
+            
+            # ERROR FIX: Use 'current_index' from your specific get_status() keys
+            old_index = status.get("current_index", 0)
+            
+            # Update game logic
             self.game.update(detected_labels)
 
+            # ERROR FIX: Check if progress was made, then refresh UI icons
+            new_status = self.game.get_status()
+            if new_status.get("current_index", 0) > old_index:
+                self.refresh_strip()
+
+            # Draw Bounding Boxes
             for label, conf, (x1, y1, x2, y2) in detections:
                 cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
                 cv2.putText(frame, f"{label} {conf:.2f}", (x1, y1 - 10), 
                             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
         else:
-            # VFX/Hand Tracking Mode
+            # VFX Mode: Track hand for effect placement
             frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=frame_rgb)
             self.mp_timestamp += 33 
@@ -245,28 +243,36 @@ class NarutoApp:
             
             if results.hand_landmarks:
                 lm = results.hand_landmarks[0][9] # Middle finger MCP
-                target_x = int(lm.x * VIDEO_WIDTH)
-                target_y = int(lm.y * VIDEO_HEIGHT)
+                target_x = int(lm.x * 1280) # Use your VIDEO_WIDTH
+                target_y = int(lm.y * 720)  # Use your VIDEO_HEIGHT
             
             if target_x is not None:
-                vfx_result = overlay_effect(frame, status["target"], target_x, target_y, 
-                                          size=400, sw=VIDEO_WIDTH, sh=VIDEO_HEIGHT)
+                # ERROR FIX: Pass status["target"].lower() to find frame folders
+                vfx_result = overlay_effect(frame, status["target"].lower(), target_x, target_y, 
+                                            size=400, sw=1280, sh=720)
                 frame = vfx_result['frame']
+                
                 if vfx_result['effect_finished']:
                     self.game.is_effect_complete = True
-                    self.game.update([]) # Resets the game
+                    self.game.update([]) # Reset for new round
+                    self.refresh_strip()
 
         # --- UI DRAWING ON FRAME ---
         cv2.putText(frame, f"TARGET: {status['target'].upper()}", (50, 50),
                     cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 0), 2)
 
-        # --- RENDERING PHASE (Must be outside the IF blocks) ---
+        # ERROR FIX: Use 'next_sign' from your get_status() to avoid AttributeError
+        guidance_text = f"NEXT: {status['next_sign'].upper()}"
+        text_color = (0, 255, 0) if status["is_complete"] else (255, 255, 255)
+        
+        cv2.putText(frame, guidance_text, (50, 90),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, text_color, 2)
+
+        # --- RENDERING PHASE ---
         canvas_w = self.video_canvas.winfo_width()
         canvas_h = self.video_canvas.winfo_height()
-
-        # Fallback for initial startup
-        if canvas_w < 2: canvas_w = WINDOW_WIDTH
-        if canvas_h < 2: canvas_h = WINDOW_HEIGHT
+        if canvas_w < 2: canvas_w = 1280 
+        if canvas_h < 2: canvas_h = 720  
 
         display_frame = cv2.resize(frame, (canvas_w, canvas_h))
         img_rgb = cv2.cvtColor(display_frame, cv2.COLOR_BGR2RGB)
@@ -292,7 +298,6 @@ class NarutoApp:
             current_idx = status["current_index"]
             is_complete = status["is_complete"]
             
-            # update the main text labels at the bottom
             self.target_label.config(text=f"TARGET: {status['target'].upper()}")
             
             if is_complete:
@@ -302,28 +307,31 @@ class NarutoApp:
                 self.next_label.config(text=f"NEXT: {status['next_sign']}", fg="white")
                 self.target_label.config(fg="#888")
 
-            # loop through each hand sign icon in the bottom bar
-            for i, widget in enumerate(self.sign_widgets):
+            for widget in self.sign_widgets:
                 lbl_img = widget["lbl_img"]
                 lbl_text = widget["lbl_text"]
                 border_frame = widget["border_frame"]
                 name = widget["name"]
-                
-                if i < current_idx:
-                    # DONE: If finished this sign, give a Green Border
-                    lbl_img.config(image=self.sign_images[f"{name}_{i}_dimmed"])
-                    border_frame.config(bg="#00ff00") 
-                    lbl_text.config(fg="#888") 
-                    
-                elif i == current_idx and not is_complete:
-                    # ACTIVE: The sign that is needed to do right now gets an Orange Border
-                    lbl_img.config(image=self.sign_images[f"{name}_{i}_normal"])
-                    border_frame.config(bg="#ffaa00") 
+                idx = widget["index"]
+
+                normal_key = f"{name}_{idx}_normal"
+                dimmed_key = f"{name}_{idx}_dimmed"
+                normal_img = self.sign_images.get(normal_key)
+                dimmed_img = self.sign_images.get(dimmed_key, normal_img)
+
+                if idx < current_idx:
+                    lbl_img.config(image=dimmed_img)
+                    lbl_img.image = dimmed_img
+                    border_frame.config(bg="#00ff00")
+                    lbl_text.config(fg="#888")
+                elif idx == current_idx and not is_complete:
+                    lbl_img.config(image=normal_img)
+                    lbl_img.image = normal_img
+                    border_frame.config(bg="#ffaa00")
                     lbl_text.config(fg="#ffaa00")
-                    
                 else:
-                    # PENDING: Signs that haven't reached yet stay dark
-                    lbl_img.config(image=self.sign_images[f"{name}_{i}_normal"])
+                    lbl_img.config(image=normal_img)
+                    lbl_img.image = normal_img
                     border_frame.config(bg="#1a1a1a")
                     lbl_text.config(fg="white")
 

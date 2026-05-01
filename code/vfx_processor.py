@@ -140,3 +140,8 @@ def _apply_alpha_overlay(bg, fg, x, y, size=None, sw=900, sh=450, is_full=False)
     except Exception as e:
         print(f"Overlay Error: {e}")
         return bg
+    
+def load_vfx_frames(self, name):
+    # ERROR FIX: Parent directory access
+    folder_path = os.path.join("..", "assets", f"{name.lower()}_frames")
+    # to load 0000.png, 0001.png, etc
