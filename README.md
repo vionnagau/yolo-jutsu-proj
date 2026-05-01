@@ -1,6 +1,5 @@
-# Naruto Jutsu — Real-Time Hand Sign Recognition
-
-A computer vision system that performs real-time hand sign detection and recognizes Naruto anime hand sign sequences, triggering VFX animations upon successful jutsu completion.
+# NinjaSight — Real-Time Hand Sign Recognition & AR VFX Pipeline
+A computer vision project that detects and classifies Naruto-inspired hand signs in real time using YOLOv8, then validates multi-step jutsu sequences through a custom game state engine. Upon successful recognition, the system triggers interactive AR-style VFX animations rendered with NumPy and OpenCV, synchronized to hand positions tracked by MediaPipe. The solution demonstrates how deep learning and computer vision can be combined to create responsive, low-latency interactive graphics at ~30 FPS.
 
 ## Technical Stack
 
@@ -146,10 +145,18 @@ yolo-jutsu-proj/
 
 ## Performance Metrics
 
-- **Detection Latency**: ~33ms per frame (30 FPS)
-- **Hand Tracking Accuracy**: 98%+ (MediaPipe benchmark)
-- **VFX Rendering**: Real-time at 30 FPS (NumPy vectorized)
-- **GPU Memory**: ~1.2 GB (YOLO + MediaPipe on CUDA)
+- **Detection Latency**: ~33ms per frame (≈30 FPS measured during testing)
+- **Confidence Threshold**: set to 0.5 (to reduce false positives during inference)
+- **VFX Rendering**: Real-time at 30 FPS (NumPy vectorized pipeline)
+- **GPU Memory Usage**: ~1.2 GB (YOLOv8 + MediaPipe on CUDA)
+
+### Training Notes
+- Epochs configured: 50  
+- Training stopped early at epoch 38 to reduce risk of overfitting  
+- Observed trends:  
+  - Losses (box, class, DFL) decreased steadily until ~epoch 35, then plateaued  
+  - Precision and recall approached ~0.95 by epoch 38  
+  - mAP50 reached ~0.97, mAP50-95 stabilized around ~0.70
 
 ## Key Achievements
 
