@@ -1,6 +1,12 @@
 # NinjaSight — Real-Time Hand Sign Recognition & AR VFX Pipeline
 A computer vision project that detects and classifies Naruto-inspired hand signs in real time using YOLOv8, then validates multi-step jutsu sequences through a custom game state engine. Upon successful recognition, the system triggers interactive AR-style VFX animations rendered with NumPy and OpenCV, synchronized to hand positions tracked by MediaPipe. The solution demonstrates how deep learning and computer vision can be combined to create responsive, low-latency interactive graphics at ~30 FPS.
 
+[![Live Demo Platform](https://img.shields.io/badge/Demo-Live%20Web%20App-ff4b4b?style=for-the-badge&logo=streamlit)](YOUR_STREAMLIT_URL_HERE)
+
+> **⚡ Recruiter Quick-Access:** Skip the Python configurations, VS Code environments, and dependency tracking entirely. Try out the functional computer vision pipeline directly inside your browser over secure WebRTC!
+> 
+> 👉 **[Launch Live Web Sandbox Instance](YOUR_STREAMLIT_URL_HERE)** 👈
+
 ## Technical Stack
 
 - **Object Detection**: YOLOv8 (trained hand sign classifier)
