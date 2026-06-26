@@ -2,7 +2,13 @@
 A computer vision project that detects and classifies Naruto-inspired hand signs in real time using YOLOv8, then validates multi-step jutsu sequences through a custom game state engine. Upon successful recognition, the system triggers interactive AR-style VFX animations rendered with NumPy and OpenCV, synchronized to hand positions tracked by MediaPipe. The solution demonstrates how deep learning and computer vision can be combined to create responsive, low-latency interactive graphics at ~30 FPS.
 
 ## Live Demo
-<video src="https://github.com/vionnagau/yolo-jutsu-proj/raw/main/ninjasight_demo_compressed.mp4" width="100%" controls></video>
+
+<p align="center">
+  <a href="https://drive.google.com/file/d/1maxRKNU57N0-MsDUqnSsHo09l-n05dS6/view?usp=sharing" target="_blank">
+    <img src="thumbnail.png" alt="Watch the NinjaSight Demo" width="100%">
+  </a>
+</p>
+
 ## Technical Stack
 
 - **Object Detection**: YOLOv8 (trained hand sign classifier)
